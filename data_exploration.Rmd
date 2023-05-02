@@ -1,0 +1,161 @@
+---
+title: "Data exploration"
+author: "Candice Djorno"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Rescale lat and lng based on coordinates in atlanta
+random forest performs really well for categorical variables
+imbalanced dataset
+
+```{r}
+library(mapview)
+library(sf)
+library(corrplot)
+```
+
+
+```{r}
+df1 <- read.csv("accData.csv", as.is = TRUE)
+# df1
+```
+
+```{r}
+names(df1)
+table(df1$Outcome)
+table(df1$Weather)
+table(df1$Light)
+```
+
+```{r}
+barplot(table(df1$Outcome), 
+        ylim = c(0,70000), xaxt = "n")
+axis(1, at = c(0.7, 2, 3, 4.3, 5.5, 6.7), labels = c("A", "B", "C", "K", "O", "U"), las = 1)
+
+counts <- table(df1$Outcome)
+# barplot(counts, main = "Severity of Outcome", horiz = TRUE, yaxt = "n",
+#         xlab = "Number of Observations")
+```
+
+```{r}
+par(mfrow=c(2,2))
+barplot(table(df1$Surface), main = "Surface", las=2)
+barplot(table(df1$Weather), main = "Weather", las = 2)
+barplot(table(df1$Light), main = "Light", las=2, xaxt = "n")
+axis(1, at = 1:6, labels = c("(None)", "Dark-light", "Dark", "Dawn", "Daylight", "Dusk"), las=2)
+```
+
+
+```{r}
+par(mfrow=c(2,2))
+barplot(table(df1$TODBucket), main = "Time of Day")
+barplot(table(df1$Season), main = "Season", las=2)
+barplot(table(df1$DLS), main = "Daylight Saving")
+barplot(table(df1$Holiday), main = "Holiday")
+```
+
+# Correlation
+
+```{r}
+df4 <- read.csv("dataWithAssignment.csv", as.is = TRUE)
+df4[sapply(df4, is.character)] <- lapply(df4[sapply(df4, is.character)], as.factor)
+df4[sapply(df4, is.factor)] <- data.matrix(df4[sapply(df4, is.factor)])
+df5 <- subset(df4, select = c(Outcome, Weather, Surface, Light, Season, 
+                              TODBucket, DOW, DLS, Holiday, ClosestCluster))
+# df5
+```
+
+```{r}
+library(EFA.dimensions)
+poly_cor <- POLYCHORIC_R(df5)
+# knitr::kable(poly_cor)
+pc <- as.data.frame(poly_cor)
+heatmap(poly_cor,  Colv = NA, Rowv = NA, scale="column", 
+        main = "Heatmap of Correlations")
+```
+
+
+
+# Mapping
+
+```{r}
+df3 <- df1
+df3$col <- 1
+df3$col[df3$Outcome == "(B) Suspected Minor/Visible Injury"] <- 2
+df3$col[df3$Outcome == "(C) Possible Injury / Complaint"] <- 3
+df3$col[df3$Outcome == "(K) Fatal Injury"] <- 4
+df3$col[df3$Outcome == "(O) No Injury"] <- 5
+df3$col[df3$Outcome == "Unknown "] <- 6
+```
+
+```{r}
+df_sub <- subset(df3, select = c(lng, lat, col, Outcome))
+```
+
+I think latitude and longitude should be exchanged..because Atlanta has longitude -84.386330 and latitude 33.753746
+
+```{r}
+loc1 <- df_sub
+summary(loc1)
+# Removing outliers
+loc <- loc1[loc1$lng < 35 & loc1$lng > 33 & loc1$lat < -83 & loc1$lat > -85, ]
+summary(loc)
+```
+
+```{r}
+# Exchanging latitude and longitude
+loc2 <- loc
+loc2$lng <- loc$lat
+loc2$lat <- loc$lng
+loc2
+```
+
+
+```{r}
+library(leaflet)
+map_clusters <- leaflet(loc2) %>% addTiles() %>% addMarkers(
+  clusterOptions = markerClusterOptions()
+)
+library(htmlwidgets)
+saveWidget(map_clusters, file="map_clusters.html")
+```
+
+```{r}
+map_acc <- leaflet(loc2) %>% addTiles() %>% addCircleMarkers()
+saveWidget(map_acc, file="map_accidents.html")
+
+# pal <- colorFactor(palette = "Blues", domain = loc2$Outcome)
+
+# map_acc2 <- leaflet(loc2) %>% addTiles() %>% addCircleMarkers(color = loc2$col)
+# map_acc2 <- leaflet(loc2) %>% addTiles() %>% addCircleMarkers(color = ~pal(loc2$Outcome))
+# saveWidget(map_acc2, file="map_accidents2.html")
+```
+
+```{r}
+# getting coordinates of cluster means
+cluster_means <- read.csv("clusterMeans.csv", as.is = TRUE)
+cluster_means
+meanlat <- -84.41223177943193
+slat <- 0.08227992229427786
+meanlong <- 33.790122783474686
+slong <- 0.13436388923816084
+clust_lat <- cluster_means$x*slat + meanlat
+clust_lng <- cluster_means$y*slong + meanlong
+unscaled_clust <- data.frame(lat=clust_lng, lng=clust_lat)
+unscaled_clust
+```
+
+```{r}
+map_means <- leaflet(unscaled_clust) %>% addTiles() %>% addMarkers()
+saveWidget(map_means, file="map_means.html")
+```
+
+
+
+
+
+
